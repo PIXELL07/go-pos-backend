@@ -1,4 +1,4 @@
-
+package auth
 
 import (
 	"errors"
@@ -89,3 +89,7 @@ func ValidateToken(tokenStr string, cfg *config.Config) (*Claims, error) {
 
 	return claims, nil
 }
+
+// FYI: "prayosha" is an open-source project that provides a point-of-sale (POS) backend system written in Go.
+// The project is designed to be modular, scalable, and easy to maintain, following best practices in software development.
+// The codebase includes various packages for handling different aspects of the application, such as authentication, database interactions, and API routing.
