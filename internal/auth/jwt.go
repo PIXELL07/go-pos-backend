@@ -3,13 +3,12 @@ package auth
 import (
 	"errors"
 	"fmt"
-	"jwt"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
-	"github.com/prayosha/pos-backend/config"
-	"github.com/prayosha/pos-backend/internal/models"
+	"github.com/prayosha/go-pos-backend/config"
+	"github.com/prayosha/go-pos-backend/internal/models"
 )
 
 type Claims struct {
