@@ -16,12 +16,15 @@ type Config struct {
 	JWT      JWTConfig
 	Google   GoogleConfig
 	CORS     CORSConfig
+	FCM      FCMConfig // added FCM config
 }
 
 type AppConfig struct {
-	Env  string
-	Port string
-	Name string
+	Env       string
+	Port      string
+	Name      string
+	UploadDir string
+	BaseURL   string
 }
 
 type DatabaseConfig struct {
@@ -58,6 +61,11 @@ type CORSConfig struct {
 	AllowedOrigins string
 }
 
+type FCMConfig struct {
+	ServerKey string
+	ProjectID string
+}
+
 var cfg *Config
 
 func Load() *Config {
@@ -73,9 +81,11 @@ func Load() *Config {
 
 	cfg = &Config{
 		App: AppConfig{
-			Env:  getEnv("APP_ENV", "development"),
-			Port: getEnv("APP_PORT", "8080"),
-			Name: getEnv("APP_NAME", "POS Backend"),
+			Env:       getEnv("APP_ENV", "development"),
+			Port:      getEnv("APP_PORT", "8080"),
+			Name:      getEnv("APP_NAME", "POS Backend"),
+			UploadDir: getEnv("UPLOAD_DIR", "./uploads"),
+			BaseURL:   getEnv("BASE_URL", "http://localhost:8080"),
 		},
 		Database: DatabaseConfig{
 			Host:         getEnv("DB_HOST", "localhost"),
@@ -106,6 +116,10 @@ func Load() *Config {
 		CORS: CORSConfig{
 			AllowedOrigins: getEnv("ALLOWED_ORIGINS", "*"),
 		},
+		FCM: FCMConfig{
+			ServerKey: getEnv("FCM_SERVER_KEY", ""),
+			ProjectID: getEnv("FCM_PROJECT_ID", ""),
+		},
 	}
 
 	return cfg
@@ -123,4 +137,11 @@ func getEnv(key, defaultVal string) string {
 		return val
 	}
 	return defaultVal
+}
+
+// UploadDir and BaseURL are added as methods for backwards compat.
+// reads from AppConfig.
+
+func (c *Config) UploadDirPath() string {
+	return getEnv("UPLOAD_DIR", "./uploads")
 }
