@@ -7,8 +7,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// Extended report types
-// represents a single item's aggregated sales across all outlets.
+// gi
 type ItemWiseRow struct {
 	ItemName   string  `json:"item_name"`
 	Category   string  `json:"category"`
@@ -375,4 +374,5 @@ func (s *ReportsService) GetDashboardChartByPlatform(outletID string, date time.
 	return result, nil
 }
 
-//add timeNow to filter
+// timeNow is a helper for services that cannot import time directly.
+func timeNow() time.Time { return time.Now() }
