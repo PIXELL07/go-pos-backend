@@ -7,7 +7,8 @@ import (
 	"gorm.io/gorm"
 )
 
-// gi
+// Extended report types
+// represents a single item's aggregated sales across all outlets.
 type ItemWiseRow struct {
 	ItemName   string  `json:"item_name"`
 	Category   string  `json:"category"`
