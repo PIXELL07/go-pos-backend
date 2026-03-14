@@ -1,6 +1,6 @@
 # POS App Backend — Go (Gin + GORM + PostgreSQL + Redis)
 
-Production-grade REST API backend for the **POSS POS Flutter application**.
+Production-grade REST API backend for the **POS Flutter application**.
 
 ---
 
