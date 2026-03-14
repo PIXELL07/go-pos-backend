@@ -3,6 +3,7 @@ package services
 import (
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/prayosha/go-pos-backend/internal/models"
@@ -150,7 +151,116 @@ func (s *MenuService) GetOutOfStockItems(outletID uuid.UUID) ([]models.MenuItem,
 		Preload("Category").Find(&items).Error
 }
 
-// add:
+// added:
+// Reports services
+
+type ReportsService struct{ db *gorm.DB }
+
+type SalesReportFilter struct {
+	OutletIDs []string
+	From      time.Time
+	To        time.Time
+	Status    string
+	Page      int
+	Limit     int
+}
+
+type SalesReportRow struct {
+	RestaurantName   string  `json:"restaurant_name"`
+	InvoiceNumbers   string  `json:"invoice_numbers"`
+	TotalBills       int     `json:"total_bills"`
+	MyAmount         float64 `json:"my_amount"`
+	TotalDiscount    float64 `json:"total_discount"`
+	NetSales         float64 `json:"net_sales"`
+	DeliveryCharge   float64 `json:"delivery_charge"`
+	ContainerCharge  float64 `json:"container_charge"`
+	ServiceCharge    float64 `json:"service_charge"`
+	AdditionalCharge float64 `json:"additional_charge"`
+	TotalTax         float64 `json:"total_tax"`
+	RoundOff         float64 `json:"round_off"`
+	WaivedOff        float64 `json:"waived_off"`
+	TotalSales       float64 `json:"total_sales"`
+	Cash             float64 `json:"cash"`
+	Card             float64 `json:"card"`
+	DuePayment       float64 `json:"due_payment"`
+	Online           float64 `json:"online"`
+	Wallet           float64 `json:"wallet"`
+	Pax              int     `json:"pax"`
+	DataSynced       string  `json:"data_synced"`
+}
+
+type SalesReport struct {
+	Data    []SalesReportRow `json:"data"`
+	Summary SalesReportRow   `json:"summary"`
+	Total   int64            `json:"total"`
+	Page    int              `json:"page"`
+	Limit   int              `json:"limit"`
+}
+
+func NewReportsService(db *gorm.DB) *ReportsService { return &ReportsService{db: db} }
+
+func (s *ReportsService) GetSalesReport(userID uuid.UUID, filter SalesReportFilter) (*SalesReport, error) {
+	to := filter.To.Add(24 * time.Hour)
+	query := s.db.Table("orders o").
+		Joins("JOIN outlets ol ON ol.id = o.outlet_id").
+		Where("o.deleted_at IS NULL AND o.created_at >= ? AND o.created_at < ?", filter.From, to)
+
+	if len(filter.OutletIDs) > 0 {
+		query = query.Where("o.outlet_id IN ?", filter.OutletIDs)
+	}
+	if filter.Status != "" && filter.Status != "all" {
+		query = query.Where("o.status = ?", filter.Status)
+	} else {
+		query = query.Where("o.status != 'cancelled'")
+	}
+
+	var rows []SalesReportRow
+	query.Select(`
+		ol.name as restaurant_name,
+		CONCAT(MIN(o.invoice_number), ' - ', MAX(o.invoice_number)) as invoice_numbers,
+		COUNT(o.id) as total_bills,
+		COALESCE(SUM(o.sub_total), 0) as my_amount,
+		COALESCE(SUM(o.discount_amount), 0) as total_discount,
+		COALESCE(SUM(o.net_sales), 0) as net_sales,
+		COALESCE(SUM(o.delivery_charge), 0) as delivery_charge,
+		COALESCE(SUM(o.container_charge), 0) as container_charge,
+		COALESCE(SUM(o.service_charge), 0) as service_charge,
+		COALESCE(SUM(o.additional_charge), 0) as additional_charge,
+		COALESCE(SUM(o.tax_amount), 0) as total_tax,
+		COALESCE(SUM(o.round_off), 0) as round_off,
+		COALESCE(SUM(o.waived_off), 0) as waived_off,
+		COALESCE(SUM(o.total_amount), 0) as total_sales,
+		COALESCE(SUM(CASE WHEN p.method='cash' THEN p.amount ELSE 0 END), 0) as cash,
+		COALESCE(SUM(CASE WHEN p.method='card' THEN p.amount ELSE 0 END), 0) as card,
+		COALESCE(SUM(CASE WHEN p.method='due' THEN p.amount ELSE 0 END), 0) as due_payment,
+		COALESCE(SUM(CASE WHEN p.method='online' THEN p.amount ELSE 0 END), 0) as online,
+		COALESCE(SUM(CASE WHEN p.method='wallet' THEN p.amount ELSE 0 END), 0) as wallet,
+		COALESCE(SUM(o.pax), 0) as pax,
+		MAX(o.updated_at)::text as data_synced
+	`).
+		Joins("LEFT JOIN payments p ON p.order_id = o.id").
+		Group("ol.id, ol.name").Scan(&rows)
+
+	var summary SalesReportRow
+	summary.RestaurantName = "Total"
+	for _, r := range rows {
+		summary.TotalBills += r.TotalBills
+		summary.MyAmount += r.MyAmount
+		summary.TotalDiscount += r.TotalDiscount
+		summary.NetSales += r.NetSales
+		summary.TotalTax += r.TotalTax
+		summary.TotalSales += r.TotalSales
+		summary.Cash += r.Cash
+		summary.Card += r.Card
+		summary.Online += r.Online
+		summary.Wallet += r.Wallet
+		summary.Pax += r.Pax
+	}
+
+	return &SalesReport{Data: rows, Summary: summary, Total: int64(len(rows)), Page: filter.Page, Limit: filter.Limit}, nil
+}
+
+// need to add:
 // reports
 // inventory
 // thirdparty
