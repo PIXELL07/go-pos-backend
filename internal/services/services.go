@@ -2,6 +2,7 @@ package services
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/prayosha/go-pos-backend/internal/models"
@@ -69,8 +70,87 @@ func (s *OutletService) CreateZone(outletID uuid.UUID, name string) (*models.Zon
 	return zone, s.db.Create(zone).Error
 }
 
-// add:
+// added:
 // Menu services
+
+type MenuService struct{ db *gorm.DB }
+type MenuItemFilter struct {
+	CategoryID  string
+	IsAvailable string
+	IsOnline    string
+}
+
+func NewMenuService(db *gorm.DB) *MenuService { return &MenuService{db: db} }
+
+func (s *MenuService) GetCategories(outletID uuid.UUID) ([]models.Category, error) {
+	var cats []models.Category
+	return cats, s.db.Where("outlet_id = ? AND deleted_at IS NULL", outletID).Order("sort_order").Find(&cats).Error
+}
+
+func (s *MenuService) CreateCategory(cat *models.Category) error {
+	return s.db.Create(cat).Error
+}
+
+func (s *MenuService) GetItems(outletID uuid.UUID, filter MenuItemFilter) ([]models.MenuItem, error) {
+	query := s.db.Where("outlet_id = ? AND deleted_at IS NULL", outletID)
+	if filter.CategoryID != "" {
+		query = query.Where("category_id = ?", filter.CategoryID)
+	}
+	if filter.IsAvailable == "true" {
+		query = query.Where("is_available = true")
+	} else if filter.IsAvailable == "false" {
+		query = query.Where("is_available = false")
+	}
+	if filter.IsOnline == "true" {
+		query = query.Where("is_online_active = true")
+	}
+	var items []models.MenuItem
+	return items, query.Preload("Category").Order("sort_order").Find(&items).Error
+}
+
+func (s *MenuService) CreateItem(item *models.MenuItem) error {
+	return s.db.Create(item).Error
+}
+
+func (s *MenuService) ToggleAvailability(id uuid.UUID, available bool, triggeredBy uuid.UUID) (*models.MenuItem, error) {
+	var item models.MenuItem
+	if err := s.db.First(&item, "id = ?", id).Error; err != nil {
+		return nil, err
+	}
+	s.db.Model(&item).Update("is_available", available)
+	s.db.Create(&models.MenuTriggerLog{
+		OutletID: item.OutletID, ItemID: id,
+		Action:      fmt.Sprintf("availability_set_%v", available),
+		TriggeredBy: triggeredBy,
+	})
+	return &item, nil
+}
+
+func (s *MenuService) ToggleOnlineStatus(id uuid.UUID, online bool, platform string, triggeredBy uuid.UUID) (*models.MenuItem, error) {
+	var item models.MenuItem
+	if err := s.db.First(&item, "id = ?", id).Error; err != nil {
+		return nil, err
+	}
+	oldStatus := fmt.Sprintf("%v", item.IsOnlineActive)
+	s.db.Model(&item).Update("is_online_active", online)
+	s.db.Create(&models.OnlineItemLog{
+		OutletID: item.OutletID, ItemID: id,
+		Platform:    platform,
+		Action:      "online_status_change",
+		OldStatus:   oldStatus,
+		NewStatus:   fmt.Sprintf("%v", online),
+		TriggeredBy: triggeredBy,
+	})
+	return &item, nil
+}
+
+func (s *MenuService) GetOutOfStockItems(outletID uuid.UUID) ([]models.MenuItem, error) {
+	var items []models.MenuItem
+	return items, s.db.Where("outlet_id = ? AND is_available = false AND deleted_at IS NULL", outletID).
+		Preload("Category").Find(&items).Error
+}
+
+// add:
 // reports
 // inventory
 // thirdparty
