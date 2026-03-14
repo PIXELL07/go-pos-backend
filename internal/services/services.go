@@ -260,9 +260,48 @@ func (s *ReportsService) GetSalesReport(userID uuid.UUID, filter SalesReportFilt
 	return &SalesReport{Data: rows, Summary: summary, Total: int64(len(rows)), Page: filter.Page, Limit: filter.Limit}, nil
 }
 
+// added:
+// Inventory Service
+
+type InventoryService struct{ db *gorm.DB }
+
+type PurchaseFilter struct {
+	OutletID string
+	Type     string
+	From     time.Time
+	To       time.Time
+}
+
+func NewInventoryService(db *gorm.DB) *InventoryService { return &InventoryService{db: db} }
+
+func (s *InventoryService) GetPendingPurchases(userID uuid.UUID, filter PurchaseFilter) ([]models.PendingPurchase, error) {
+	to := filter.To.Add(24 * time.Hour)
+	query := s.db.Model(&models.PendingPurchase{}).Preload("Outlet").
+		Where("created_at >= ? AND created_at < ?", filter.From, to)
+	if filter.OutletID != "" {
+		query = query.Where("outlet_id = ?", filter.OutletID)
+	}
+	if filter.Type != "" {
+		query = query.Where("type = ?", filter.Type)
+	}
+	var purchases []models.PendingPurchase
+	return purchases, query.Order("created_at DESC").Find(&purchases).Error
+}
+
+func (s *InventoryService) CreatePurchase(p *models.PendingPurchase) error {
+	return s.db.Create(p).Error
+}
+
+func (s *InventoryService) UpdatePurchaseStatus(id uuid.UUID, status string) (*models.PendingPurchase, error) {
+	var p models.PendingPurchase
+	if err := s.db.First(&p, "id = ?", id).Error; err != nil {
+		return nil, err
+	}
+	s.db.Model(&p).Update("status", status)
+	return &p, nil
+}
+
 // need to add:
-// reports
-// inventory
 // thirdparty
 // logs
 // franchise
