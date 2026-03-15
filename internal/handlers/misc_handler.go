@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -281,4 +282,92 @@ func (h *MenuHandler) GetOutOfStockItems(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": items})
+}
+
+// InventoryHandler
+
+type InventoryHandler struct{ inventoryService *services.InventoryService }
+
+func NewInventoryHandler(svc *services.InventoryService) *InventoryHandler {
+	return &InventoryHandler{inventoryService: svc}
+}
+
+// GET /api/v1/purchases/pending?outlet_id=&from=&to=&type=&page=&limit=
+func (h *InventoryHandler) GetPendingPurchases(c *gin.Context) {
+	fromStr := c.DefaultQuery("from", time.Now().Format("2006-01-02"))
+	toStr := c.DefaultQuery("to", time.Now().Format("2006-01-02"))
+	from, _ := time.Parse("2006-01-02", fromStr)
+	to, _ := time.Parse("2006-01-02", toStr)
+
+	filter := services.PurchaseFilter{
+		OutletID: c.Query("outlet_id"),
+		Type:     c.Query("type"),
+		From:     from,
+		To:       to,
+		Page:     parseIntDefault(c.DefaultQuery("page", "1"), 1),
+		Limit:    parseIntDefault(c.DefaultQuery("limit", "20"), 20),
+	}
+	purchases, total, err := h.inventoryService.GetPendingPurchases(filter)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch purchases"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": purchases, "total": total, "page": filter.Page, "limit": filter.Limit})
+}
+
+// POST /api/v1/purchases
+func (h *InventoryHandler) CreatePurchase(c *gin.Context) {
+	var req struct {
+		OutletID string  `json:"outlet_id" binding:"required"`
+		ItemName string  `json:"item_name" binding:"required"`
+		Quantity float64 `json:"quantity" binding:"required"`
+		Unit     string  `json:"unit" binding:"required"`
+		Amount   float64 `json:"amount"`
+		Type     string  `json:"type"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	outletID, _ := uuid.Parse(req.OutletID)
+	userID, _ := middleware.GetUserID(c)
+	purchase := &models.PendingPurchase{
+		OutletID:    outletID,
+		ItemName:    req.ItemName,
+		Quantity:    req.Quantity,
+		Unit:        req.Unit,
+		Amount:      req.Amount,
+		Type:        req.Type,
+		RequestedBy: userID,
+		Status:      "pending",
+	}
+	if purchase.Type == "" {
+		purchase.Type = "purchase"
+	}
+	if err := h.inventoryService.CreatePurchase(purchase); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create purchase"})
+		return
+	}
+	c.JSON(http.StatusCreated, purchase)
+}
+
+// PATCH /api/v1/purchases/:id/status
+func (h *InventoryHandler) UpdatePurchaseStatus(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+	var req struct {
+		Status string `json:"status" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := h.inventoryService.UpdateStatus(id, req.Status); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update status"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "status updated"})
 }

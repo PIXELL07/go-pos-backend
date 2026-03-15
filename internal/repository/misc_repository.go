@@ -264,8 +264,41 @@ func (r *OnlineStoreLogRepository) List(f LogFilter) ([]models.OnlineStoreLog, e
 		Scopes(Paginate(f.Page, f.Limit)).Find(&logs).Error
 }
 
-// add:
 // OnlineItemLogRepository
+type OnlineItemLogRepository struct {
+	*Repository[models.OnlineItemLog]
+}
+
+func NewOnlineItemLogRepository(db *gorm.DB) *OnlineItemLogRepository {
+	return &OnlineItemLogRepository{Repository: NewRepository[models.OnlineItemLog](db)}
+}
+
+func (r *OnlineItemLogRepository) List(f LogFilter) ([]models.OnlineItemLog, error) {
+	q := r.db.Model(&models.OnlineItemLog{})
+	if f.OutletID != "" {
+		q = q.Where("outlet_id = ?", f.OutletID)
+	}
+	if f.Platform != "" {
+		q = q.Where("platform = ?", f.Platform)
+	}
+	q = applyLogDateFilter(q, f.From, f.To)
+	var logs []models.OnlineItemLog
+	return logs, q.Order("created_at DESC").
+		Scopes(Paginate(f.Page, f.Limit)).Find(&logs).Error
+}
+
+// private helpers
+
+func applyLogDateFilter(q *gorm.DB, from, to time.Time) *gorm.DB {
+	if !from.IsZero() {
+		q = q.Where("created_at >= ?", from)
+	}
+	if !to.IsZero() {
+		q = q.Where("created_at < ?", to.Add(24*time.Hour))
+	}
+	return q
+}
+
+// stil need to add:
 // frachise log
 // refresh tokens
-// helpers
