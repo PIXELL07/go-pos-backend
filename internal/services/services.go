@@ -151,7 +151,6 @@ func (s *MenuService) GetOutOfStockItems(outletID uuid.UUID) ([]models.MenuItem,
 		Preload("Category").Find(&items).Error
 }
 
-// added:
 // Reports services
 
 type ReportsService struct{ db *gorm.DB }
@@ -260,7 +259,6 @@ func (s *ReportsService) GetSalesReport(userID uuid.UUID, filter SalesReportFilt
 	return &SalesReport{Data: rows, Summary: summary, Total: int64(len(rows)), Page: filter.Page, Limit: filter.Limit}, nil
 }
 
-// added:
 // Inventory Service
 
 type InventoryService struct{ db *gorm.DB }
@@ -370,10 +368,60 @@ func (s *ThirdPartyService) UpdateConfig(id uuid.UUID, apiKey, storeID string, i
 	return &cfg, nil
 }
 
+// added:
+// Logs Service
+
+type LogsService struct{ db *gorm.DB }
+
+func NewLogsService(db *gorm.DB) *LogsService { return &LogsService{db: db} }
+
+func (s *LogsService) GetMenuTriggerLogs(filter map[string]interface{}) (interface{}, error) {
+	query := s.db.Model(&models.MenuTriggerLog{}).Preload("Outlet")
+	if v, ok := filter["outlet_id"].(string); ok && v != "" {
+		query = query.Where("outlet_id = ?", v)
+	}
+	applyDateFilter(query, filter)
+	var logs []models.MenuTriggerLog
+	return logs, query.Order("created_at DESC").Find(&logs).Error
+}
+
+func (s *LogsService) GetOnlineStoreLogs(filter map[string]interface{}) (interface{}, error) {
+	query := s.db.Model(&models.OnlineStoreLog{}).Preload("Outlet")
+	if v, ok := filter["outlet_id"].(string); ok && v != "" {
+		query = query.Where("outlet_id = ?", v)
+	}
+	if v, ok := filter["platform"].(string); ok && v != "" {
+		query = query.Where("platform = ?", v)
+	}
+	var logs []models.OnlineStoreLog
+	return logs, query.Order("created_at DESC").Find(&logs).Error
+}
+
+func (s *LogsService) GetOnlineItemLogs(filter map[string]interface{}) (interface{}, error) {
+	query := s.db.Model(&models.OnlineItemLog{})
+	if v, ok := filter["outlet_id"].(string); ok && v != "" {
+		query = query.Where("outlet_id = ?", v)
+	}
+	if v, ok := filter["platform"].(string); ok && v != "" {
+		query = query.Where("platform = ?", v)
+	}
+	var logs []models.OnlineItemLog
+	return logs, query.Order("created_at DESC").Find(&logs).Error
+}
+
+func applyDateFilter(query *gorm.DB, filter map[string]interface{}) {
+	if from, ok := filter["from"].(string); ok && from != "" {
+		t, _ := time.Parse("2006-01-02", from)
+		query = query.Where("created_at >= ?", t)
+	}
+	if to, ok := filter["to"].(string); ok && to != "" {
+		t, _ := time.Parse("2006-01-02", to)
+		query = query.Where("created_at < ?", t.Add(24*time.Hour))
+	}
+}
+
 // need to add:
 // ThirdPartyService extras
-// logs
 // franchise , FranchiseService extras
 // NotificationService extras
-// user sevices , UserService extras like role management, permissions, etc
 // error handling
