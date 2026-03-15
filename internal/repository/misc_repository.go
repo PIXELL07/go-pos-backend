@@ -3,6 +3,8 @@ package repository
 import (
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/prayosha/go-pos-backend/internal/models"
 	"gorm.io/gorm"
 )
 
@@ -97,3 +99,95 @@ func (r *ReportRepository) GetSalesReport(f SalesReportFilter) ([]SalesReportRow
 
 	return rows, err
 }
+
+// PendingPurchase
+
+type PurchaseRepository struct {
+	*Repository[models.PendingPurchase]
+}
+
+func NewPurchaseRepository(db *gorm.DB) *PurchaseRepository {
+	return &PurchaseRepository{Repository: NewRepository[models.PendingPurchase](db)}
+}
+
+type PurchaseFilter struct {
+	OutletID string
+	Type     string
+	From     time.Time
+	To       time.Time
+	Page     int
+	Limit    int
+}
+
+func (r *PurchaseRepository) List(f PurchaseFilter) ([]models.PendingPurchase, error) {
+	to := f.To.Add(24 * time.Hour)
+	q := r.db.Model(&models.PendingPurchase{}).Preload("Outlet").
+		Where("created_at >= ? AND created_at < ?", f.From, to)
+	if f.OutletID != "" {
+		q = q.Where("outlet_id = ?", f.OutletID)
+	}
+	if f.Type != "" {
+		q = q.Where("type = ?", f.Type)
+	}
+	var purchases []models.PendingPurchase
+	return purchases, q.Order("created_at DESC").
+		Scopes(Paginate(f.Page, f.Limit)).Find(&purchases).Error
+}
+
+func (r *PurchaseRepository) SetStatus(id uuid.UUID, status string) error {
+	return r.db.Model(&models.PendingPurchase{}).Where("id = ?", id).
+		Update("status", status).Error
+}
+
+// Notification
+
+type NotificationRepository struct {
+	*Repository[models.Notification]
+}
+
+func NewNotificationRepository(db *gorm.DB) *NotificationRepository {
+	return &NotificationRepository{Repository: NewRepository[models.Notification](db)}
+}
+
+type NotifFilter struct {
+	IsRead *bool
+	Page   int
+	Limit  int
+}
+
+func (r *NotificationRepository) FindByUser(userID uuid.UUID, f NotifFilter) ([]models.Notification, int64, error) {
+	q := r.db.Model(&models.Notification{}).Where("user_id = ?", userID)
+	if f.IsRead != nil {
+		q = q.Where("is_read = ?", *f.IsRead)
+	}
+	var total int64
+	q.Count(&total)
+	var notifs []models.Notification
+	err := q.Order("created_at DESC").Scopes(Paginate(f.Page, f.Limit)).Find(&notifs).Error
+	return notifs, total, err
+}
+
+func (r *NotificationRepository) MarkRead(userID, notifID uuid.UUID) error {
+	return r.db.Model(&models.Notification{}).
+		Where("id = ? AND user_id = ?", notifID, userID).
+		Update("is_read", true).Error
+}
+
+func (r *NotificationRepository) MarkAllRead(userID uuid.UUID) error {
+	return r.db.Model(&models.Notification{}).
+		Where("user_id = ? AND is_read = false", userID).
+		Update("is_read", true).Error
+}
+
+func (r *NotificationRepository) UnreadCount(userID uuid.UUID) (int64, error) {
+	return r.Count("user_id = ? AND is_read = false", userID)
+}
+
+// add:
+// thirdparty
+// logs
+// MenuTriggerLogRepository
+// OnlineStoreLogRepository
+// frachise log
+// refresh tokens
+// helpers
