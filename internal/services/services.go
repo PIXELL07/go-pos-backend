@@ -301,9 +301,51 @@ func (s *InventoryService) UpdatePurchaseStatus(id uuid.UUID, status string) (*m
 	return &p, nil
 }
 
+// Notification Service
+
+type NotificationService struct{ db *gorm.DB }
+
+type NotificationFilter struct {
+	IsRead string
+	Page   int
+	Limit  int
+}
+
+type NotifResult struct {
+	Data  []models.Notification `json:"data"`
+	Total int64                 `json:"total"`
+	Page  int                   `json:"page"`
+	Limit int                   `json:"limit"`
+}
+
+func NewNotificationService(db *gorm.DB) *NotificationService { return &NotificationService{db: db} }
+
+func (s *NotificationService) GetNotifications(userID uuid.UUID, filter NotificationFilter) (*NotifResult, error) {
+	query := s.db.Model(&models.Notification{}).Where("user_id = ?", userID)
+	if filter.IsRead == "true" {
+		query = query.Where("is_read = true")
+	} else if filter.IsRead == "false" {
+		query = query.Where("is_read = false")
+	}
+	var total int64
+	query.Count(&total)
+	var notifications []models.Notification
+	query.Order("created_at DESC").Offset((filter.Page - 1) * filter.Limit).Limit(filter.Limit).Find(&notifications)
+	return &NotifResult{Data: notifications, Total: total, Page: filter.Page, Limit: filter.Limit}, nil
+}
+
+func (s *NotificationService) MarkRead(userID, notifID uuid.UUID) error {
+	return s.db.Model(&models.Notification{}).Where("id = ? AND user_id = ?", notifID, userID).Update("is_read", true).Error
+}
+
+func (s *NotificationService) MarkAllRead(userID uuid.UUID) error {
+	return s.db.Model(&models.Notification{}).Where("user_id = ?", userID).Update("is_read", true).Error
+}
+
 // need to add:
-// thirdparty
+// thirdparty ,ThirdPartyService extras
 // logs
-// franchise
-// user sevices
+// franchise , FranchiseService extras
+// NotificationService extras
+// user sevices , UserService extras like role management, permissions, etc
 // error handling
