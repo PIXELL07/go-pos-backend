@@ -342,8 +342,36 @@ func (s *NotificationService) MarkAllRead(userID uuid.UUID) error {
 	return s.db.Model(&models.Notification{}).Where("user_id = ?", userID).Update("is_read", true).Error
 }
 
+// Thirdparty service
+
+type ThirdPartyService struct{ db *gorm.DB }
+
+func NewThirdPartyService(db *gorm.DB) *ThirdPartyService { return &ThirdPartyService{db: db} }
+
+func (s *ThirdPartyService) GetConfigs(outletID string) ([]models.ThirdPartyConfig, error) {
+	query := s.db.Model(&models.ThirdPartyConfig{}).Preload("Outlet")
+	if outletID != "" {
+		query = query.Where("outlet_id = ?", outletID)
+	}
+	var configs []models.ThirdPartyConfig
+	return configs, query.Find(&configs).Error
+}
+
+func (s *ThirdPartyService) UpdateConfig(id uuid.UUID, apiKey, storeID string, isActive bool, cfgJSON string) (*models.ThirdPartyConfig, error) {
+	var cfg models.ThirdPartyConfig
+	if err := s.db.First(&cfg, "id = ?", id).Error; err != nil {
+		return nil, err
+	}
+	updates := map[string]interface{}{"store_id": storeID, "is_active": isActive, "config": cfgJSON}
+	if apiKey != "" {
+		updates["api_key"] = apiKey
+	}
+	s.db.Model(&cfg).Updates(updates)
+	return &cfg, nil
+}
+
 // need to add:
-// thirdparty ,ThirdPartyService extras
+// ThirdPartyService extras
 // logs
 // franchise , FranchiseService extras
 // NotificationService extras
