@@ -183,9 +183,43 @@ func (r *NotificationRepository) UnreadCount(userID uuid.UUID) (int64, error) {
 	return r.Count("user_id = ? AND is_read = false", userID)
 }
 
+// Thirdparty Config
+type ThirdPartyRepository struct {
+	*Repository[models.ThirdPartyConfig]
+}
+
+func NewThirdPartyRepository(db *gorm.DB) *ThirdPartyRepository {
+	return &ThirdPartyRepository{Repository: NewRepository[models.ThirdPartyConfig](db)}
+}
+
+func (r *ThirdPartyRepository) FindByOutlet(outletID string) ([]models.ThirdPartyConfig, error) {
+	q := r.db.Preload("Outlet")
+	if outletID != "" {
+		q = q.Where("outlet_id = ?", outletID)
+	}
+	var configs []models.ThirdPartyConfig
+	return configs, q.Find(&configs).Error
+}
+
+func (r *ThirdPartyRepository) UpsertForOutlet(outletID uuid.UUID, platform string) (*models.ThirdPartyConfig, error) {
+	cfg := &models.ThirdPartyConfig{OutletID: outletID, Platform: platform}
+	err := r.db.
+		Where(models.ThirdPartyConfig{OutletID: outletID, Platform: platform}).
+		FirstOrCreate(cfg).Error
+	return cfg, err
+}
+
+// Logs
+type LogFilter struct {
+	OutletID string
+	Platform string
+	From     time.Time
+	To       time.Time
+	Page     int
+	Limit    int
+}
+
 // add:
-// thirdparty
-// logs
 // MenuTriggerLogRepository
 // OnlineStoreLogRepository
 // frachise log
