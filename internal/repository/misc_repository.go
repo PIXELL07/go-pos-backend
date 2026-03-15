@@ -219,9 +219,53 @@ type LogFilter struct {
 	Limit    int
 }
 
-// add:
 // MenuTriggerLogRepository
+
+type MenuTriggerLogRepository struct {
+	*Repository[models.MenuTriggerLog]
+}
+
+func NewMenuTriggerLogRepository(db *gorm.DB) *MenuTriggerLogRepository {
+	return &MenuTriggerLogRepository{Repository: NewRepository[models.MenuTriggerLog](db)}
+}
+
+func (r *MenuTriggerLogRepository) List(f LogFilter) ([]models.MenuTriggerLog, error) {
+	q := r.db.Preload("Outlet")
+	if f.OutletID != "" {
+		q = q.Where("outlet_id = ?", f.OutletID)
+	}
+	q = applyLogDateFilter(q, f.From, f.To)
+	var logs []models.MenuTriggerLog
+	return logs, q.Order("created_at DESC").
+		Scopes(Paginate(f.Page, f.Limit)).Find(&logs).Error
+}
+
 // OnlineStoreLogRepository
+
+type OnlineStoreLogRepository struct {
+	*Repository[models.OnlineStoreLog]
+}
+
+func NewOnlineStoreLogRepository(db *gorm.DB) *OnlineStoreLogRepository {
+	return &OnlineStoreLogRepository{Repository: NewRepository[models.OnlineStoreLog](db)}
+}
+
+func (r *OnlineStoreLogRepository) List(f LogFilter) ([]models.OnlineStoreLog, error) {
+	q := r.db.Preload("Outlet")
+	if f.OutletID != "" {
+		q = q.Where("outlet_id = ?", f.OutletID)
+	}
+	if f.Platform != "" {
+		q = q.Where("platform = ?", f.Platform)
+	}
+	q = applyLogDateFilter(q, f.From, f.To)
+	var logs []models.OnlineStoreLog
+	return logs, q.Order("created_at DESC").
+		Scopes(Paginate(f.Page, f.Limit)).Find(&logs).Error
+}
+
+// add:
+// OnlineItemLogRepository
 // frachise log
 // refresh tokens
 // helpers
