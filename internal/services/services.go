@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/prayosha/go-pos-backend/internal/models"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
@@ -420,8 +421,72 @@ func applyDateFilter(query *gorm.DB, filter map[string]interface{}) {
 	}
 }
 
+// Franchise Service
+
+type FranchiseService struct{ db *gorm.DB }
+
+func NewFranchiseService(db *gorm.DB) *FranchiseService { return &FranchiseService{db: db} }
+
+func (s *FranchiseService) List() ([]models.Franchise, error) {
+	var franchises []models.Franchise
+	return franchises, s.db.Preload("Outlets").Find(&franchises).Error
+}
+
+func (s *FranchiseService) Create(f *models.Franchise) error {
+	return s.db.Create(f).Error
+}
+
+// User Service
+
+type UserService struct{ db *gorm.DB }
+
+func NewUserService(db *gorm.DB) *UserService { return &UserService{db: db} }
+
+func (s *UserService) GetUsersByRole(role models.UserRole, outletID string) ([]models.User, error) {
+	var users []models.User
+	return users, s.db.Where("role = ? AND is_active = true", role).Find(&users).Error
+}
+
+func (s *UserService) InviteUser(name, email, mobile string, role models.UserRole, outletID string) (*models.User, error) {
+	var count int64
+	s.db.Model(&models.User{}).Where("email = ?", email).Count(&count)
+	if count > 0 {
+		return nil, errors.New("user with this email already exists")
+	}
+	tempPassword := fmt.Sprintf("Temp@%d", time.Now().Unix())
+	hash, _ := bcrypt.GenerateFromPassword([]byte(tempPassword), bcrypt.DefaultCost)
+	user := &models.User{
+		Name: name, Email: email, Mobile: mobile,
+		PasswordHash: string(hash), Role: role, IsActive: true,
+	}
+	if err := s.db.Create(user).Error; err != nil {
+		return nil, err
+	}
+	if outletID != "" {
+		if outID, err := uuid.Parse(outletID); err == nil {
+			s.db.Create(&models.OutletAccess{UserID: user.ID, OutletID: outID, Role: role})
+		}
+	}
+	return user, nil
+}
+
+func (s *UserService) UpdateUser(id uuid.UUID, updates map[string]interface{}) (*models.User, error) {
+	var user models.User
+	if err := s.db.First(&user, "id = ?", id).Error; err != nil {
+		return nil, err
+	}
+	delete(updates, "id")
+	delete(updates, "password_hash")
+	s.db.Model(&user).Updates(updates)
+	return &user, nil
+}
+
+func (s *UserService) DeleteUser(id uuid.UUID) error {
+	return s.db.Delete(&models.User{}, "id = ?", id).Error
+}
+
 // need to add:
 // ThirdPartyService extras
-// franchise , FranchiseService extras
+// FranchiseService extras
 // NotificationService extras
 // error handling
