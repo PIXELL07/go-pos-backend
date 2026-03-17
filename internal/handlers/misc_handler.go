@@ -466,3 +466,112 @@ func (h *ThirdPartyHandler) Update(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, cfg)
 }
+
+// LogsHandler
+
+type LogsHandler struct{ logsService *services.LogsService }
+
+func NewLogsHandler(svc *services.LogsService) *LogsHandler {
+	return &LogsHandler{logsService: svc}
+}
+
+func (h *LogsHandler) GetMenuTriggerLogs(c *gin.Context) {
+	logs, err := h.logsService.GetMenuTriggerLogs(buildLogFilter(c))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch logs"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": logs})
+}
+
+func (h *LogsHandler) GetOnlineStoreLogs(c *gin.Context) {
+	f := buildLogFilter(c)
+	f["platform"] = c.Query("platform")
+	logs, err := h.logsService.GetOnlineStoreLogs(f)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch logs"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": logs})
+}
+
+func (h *LogsHandler) GetOnlineItemLogs(c *gin.Context) {
+	f := buildLogFilter(c)
+	f["platform"] = c.Query("platform")
+	logs, err := h.logsService.GetOnlineItemLogs(f)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch logs"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": logs})
+}
+
+func buildLogFilter(c *gin.Context) map[string]interface{} {
+	return map[string]interface{}{
+		"outlet_id": c.Query("outlet_id"),
+		"from":      c.DefaultQuery("from", time.Now().AddDate(0, 0, -7).Format("2006-01-02")),
+		"to":        c.DefaultQuery("to", time.Now().Format("2006-01-02")),
+		"page":      parseIntDefault(c.DefaultQuery("page", "1"), 1),
+		"limit":     parseIntDefault(c.DefaultQuery("limit", "50"), 50),
+	}
+}
+
+// FranchiseHandler
+
+type FranchiseHandler struct{ franchiseSvc *services.FranchiseService }
+
+func NewFranchiseHandler(svc *services.FranchiseService) *FranchiseHandler {
+	return &FranchiseHandler{franchiseSvc: svc}
+}
+
+func (h *FranchiseHandler) List(c *gin.Context) {
+	franchises, err := h.franchiseSvc.ListWithOutlets()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch franchises"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": franchises})
+}
+
+func (h *FranchiseHandler) Create(c *gin.Context) {
+	var req struct {
+		Name string `json:"name" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	franchise := &models.Franchise{Name: req.Name}
+	if err := h.franchiseSvc.Create(franchise); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create franchise"})
+		return
+	}
+	c.JSON(http.StatusCreated, franchise)
+}
+
+// POST /api/v1/franchises/:id/outlets  — assign outlet to franchise
+func (h *FranchiseHandler) AssignOutlet(c *gin.Context) {
+	franchiseID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid franchise id"})
+		return
+	}
+	var req struct {
+		OutletID string `json:"outlet_id" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	outletID, err := uuid.Parse(req.OutletID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid outlet_id"})
+		return
+	}
+	outlet, err := h.franchiseSvc.AssignOutlet(franchiseID, outletID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, outlet)
+}
