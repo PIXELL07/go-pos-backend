@@ -575,3 +575,100 @@ func (h *FranchiseHandler) AssignOutlet(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, outlet)
 }
+
+// UserHandler
+
+type UserHandler struct{ userService *services.UserService }
+
+func NewUserHandler(svc *services.UserService) *UserHandler {
+	return &UserHandler{userService: svc}
+}
+
+func (h *UserHandler) GetBillers(c *gin.Context) {
+	users, err := h.userService.GetByRole(models.RoleBiller, c.Query("outlet_id"))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch billers"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": users})
+}
+
+func (h *UserHandler) GetAdmins(c *gin.Context) {
+	users, err := h.userService.GetByRole(models.RoleAdmin, c.Query("outlet_id"))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch admins"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": users})
+}
+
+func (h *UserHandler) InviteUser(c *gin.Context) {
+	var req struct {
+		Name     string `json:"name" binding:"required"`
+		Email    string `json:"email" binding:"required,email"`
+		Mobile   string `json:"mobile"`
+		Role     string `json:"role" binding:"required"`
+		OutletID string `json:"outlet_id"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	user, err := h.userService.Invite(req.Name, req.Email, req.Mobile,
+		models.UserRole(req.Role), req.OutletID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusCreated, user)
+}
+
+func (h *UserHandler) Update(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+	var req struct {
+		Name      string `json:"name"`
+		IsActive  *bool  `json:"is_active"`
+		Role      string `json:"role"`
+		AvatarURL string `json:"avatar_url"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	updates := map[string]interface{}{}
+	if req.Name != "" {
+		updates["name"] = req.Name
+	}
+	if req.IsActive != nil {
+		updates["is_active"] = *req.IsActive
+	}
+	if req.Role != "" {
+		updates["role"] = req.Role
+	}
+	if req.AvatarURL != "" {
+		updates["avatar_url"] = req.AvatarURL
+	}
+	user, err := h.userService.Update(id, updates)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, user)
+}
+
+func (h *UserHandler) Delete(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+	if err := h.userService.Delete(id); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "user deleted"})
+}
