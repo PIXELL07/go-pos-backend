@@ -485,8 +485,53 @@ func (s *UserService) DeleteUser(id uuid.UUID) error {
 	return s.db.Delete(&models.User{}, "id = ?", id).Error
 }
 
+// FranchiseService extras
+
+func (s *FranchiseService) ListWithOutlets() ([]models.Franchise, error) {
+	var franchises []models.Franchise
+	return franchises, s.db.Preload("Outlets").Find(&franchises).Error
+}
+
+func (s *FranchiseService) AssignOutlet(franchiseID, outletID uuid.UUID) (*models.Outlet, error) {
+	var outlet models.Outlet
+	if err := s.db.First(&outlet, "id = ?", outletID).Error; err != nil {
+		return nil, err
+	}
+	outlet.FranchiseID = &franchiseID
+	return &outlet, s.db.Save(&outlet).Error
+}
+
+// InventoryService extras
+
+type PurchaseFilterExtra struct {
+	OutletID string
+	Type     string
+	From     time.Time
+	To       time.Time
+	Page     int
+	Limit    int
+}
+
+func (s *InventoryService) GetPendingPurchase(f PurchaseFilterExtra) ([]models.PendingPurchase, int64, error) {
+	to := f.To.Add(24 * time.Hour)
+	q := s.db.Model(&models.PendingPurchase{}).Preload("Outlet").
+		Where("created_at >= ? AND created_at < ?", f.From, to)
+	if f.OutletID != "" {
+		q = q.Where("outlet_id = ?", f.OutletID)
+	}
+	if f.Type != "" {
+		q = q.Where("type = ?", f.Type)
+	}
+	var total int64
+	q.Count(&total)
+	offset := (f.Page - 1) * f.Limit
+	var purchases []models.PendingPurchase
+	err := q.Order("created_at DESC").Offset(offset).Limit(f.Limit).Find(&purchases).Error
+	return purchases, total, err
+}
+
 // need to add:
 // ThirdPartyService extras
-// FranchiseService extras
+// UserService extras
 // NotificationService extras
 // error handling
