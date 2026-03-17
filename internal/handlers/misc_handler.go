@@ -371,3 +371,98 @@ func (h *InventoryHandler) UpdatePurchaseStatus(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "status updated"})
 }
+
+// NotificationHandler
+
+type NotificationHandler struct{ notifService *services.NotificationService }
+
+func NewNotificationHandler(svc *services.NotificationService) *NotificationHandler {
+	return &NotificationHandler{notifService: svc}
+}
+
+func (h *NotificationHandler) List(c *gin.Context) {
+	userID, _ := middleware.GetUserID(c)
+	notifs, total, err := h.notifService.GetByUser(userID, parseIntDefault(c.DefaultQuery("page", "1"), 1))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch notifications"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": notifs, "total": total})
+}
+
+func (h *NotificationHandler) MarkRead(c *gin.Context) {
+	notifID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+	userID, _ := middleware.GetUserID(c)
+	if err := h.notifService.MarkRead(userID, notifID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to mark read"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "marked read"})
+}
+
+func (h *NotificationHandler) MarkAllRead(c *gin.Context) {
+	userID, _ := middleware.GetUserID(c)
+	if err := h.notifService.MarkAllRead(userID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to mark all read"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "all marked read"})
+}
+
+// ThirdPartyHandler
+
+type ThirdPartyHandler struct{ tpService *services.ThirdPartyService }
+
+func NewThirdPartyHandler(svc *services.ThirdPartyService) *ThirdPartyHandler {
+	return &ThirdPartyHandler{tpService: svc}
+}
+
+func (h *ThirdPartyHandler) List(c *gin.Context) {
+	configs, err := h.tpService.List(c.Query("outlet_id"))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch configs"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": configs})
+}
+
+func (h *ThirdPartyHandler) Update(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+	var req struct {
+		APIKey   string `json:"api_key"`
+		StoreID  string `json:"store_id"`
+		IsActive *bool  `json:"is_active"`
+		Config   string `json:"config"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	updates := map[string]interface{}{}
+	if req.APIKey != "" {
+		updates["api_key"] = req.APIKey
+	}
+	if req.StoreID != "" {
+		updates["store_id"] = req.StoreID
+	}
+	if req.IsActive != nil {
+		updates["is_active"] = *req.IsActive
+	}
+	if req.Config != "" {
+		updates["config"] = req.Config
+	}
+	cfg, err := h.tpService.Update(id, updates)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update config"})
+		return
+	}
+	c.JSON(http.StatusOK, cfg)
+}
