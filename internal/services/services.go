@@ -502,7 +502,6 @@ func (s *FranchiseService) AssignOutlet(franchiseID, outletID uuid.UUID) (*model
 }
 
 // InventoryService extras
-
 type PurchaseFilterExtra struct {
 	OutletID string
 	Type     string
@@ -530,8 +529,47 @@ func (s *InventoryService) GetPendingPurchase(f PurchaseFilterExtra) ([]models.P
 	return purchases, total, err
 }
 
-// need to add:
-// ThirdPartyService extras
-// UserService extras
+// added:
 // NotificationService extras
+
+func (s *NotificationService) GetByUser(userID uuid.UUID, page int) ([]models.Notification, int64, error) {
+	q := s.db.Model(&models.Notification{}).Where("user_id = ?", userID)
+	var total int64
+	q.Count(&total)
+	var notifs []models.Notification
+	err := q.Order("created_at DESC").Offset((page - 1) * 20).Limit(20).Find(&notifs).Error
+	return notifs, total, err
+}
+
+func (s *NotificationService) MarkReads(userID, notifID uuid.UUID) error {
+	return s.db.Model(&models.Notification{}).
+		Where("id = ? AND user_id = ?", notifID, userID).
+		Update("is_read", true).Error
+}
+
+func (s *NotificationService) MarkAllReads(userID uuid.UUID) error {
+	return s.db.Model(&models.Notification{}).
+		Where("user_id = ? AND is_read = false", userID).
+		Update("is_read", true).Error
+}
+
+// Create inserts a new notification and optionally queues FCM push.
+func (s *NotificationService) Create(n *models.Notification) error {
+	return s.db.Create(n).Error
+}
+
+// ThirdPartyService extras
+
+func (s *ThirdPartyService) Update(id uuid.UUID, updates map[string]interface{}) (*models.ThirdPartyConfig, error) {
+	var cfg models.ThirdPartyConfig
+	if err := s.db.First(&cfg, "id = ?", id).Error; err != nil {
+		return nil, err
+	}
+	s.db.Model(&cfg).Updates(updates)
+	s.db.Preload("Outlet").First(&cfg, "id = ?", id)
+	return &cfg, nil
+}
+
+// need to add:
+// UserService extras
 // error handling
