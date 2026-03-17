@@ -287,6 +287,55 @@ func (r *OnlineItemLogRepository) List(f LogFilter) ([]models.OnlineItemLog, err
 		Scopes(Paginate(f.Page, f.Limit)).Find(&logs).Error
 }
 
+// added:
+// Franchise
+
+type FranchiseRepository struct {
+	*Repository[models.Franchise]
+}
+
+func NewFranchiseRepository(db *gorm.DB) *FranchiseRepository {
+	return &FranchiseRepository{Repository: NewRepository[models.Franchise](db)}
+}
+
+func (r *FranchiseRepository) FindAllWithOutlets() ([]models.Franchise, error) {
+	var franchises []models.Franchise
+	return franchises, r.db.Preload("Outlets").Find(&franchises).Error
+}
+
+// RefreshToken
+
+type RefreshTokenRepository struct {
+	*Repository[models.RefreshToken]
+}
+
+func NewRefreshTokenRepository(db *gorm.DB) *RefreshTokenRepository {
+	return &RefreshTokenRepository{Repository: NewRepository[models.RefreshToken](db)}
+}
+
+func (r *RefreshTokenRepository) FindByToken(token string) (*models.RefreshToken, error) {
+	var rt models.RefreshToken
+	err := r.db.Where("token = ? AND is_revoked = false AND expires_at > NOW()", token).
+		First(&rt).Error
+	return &rt, err
+}
+
+func (r *RefreshTokenRepository) Revoke(token string) error {
+	return r.db.Model(&models.RefreshToken{}).
+		Where("token = ?", token).Update("is_revoked", true).Error
+}
+
+func (r *RefreshTokenRepository) RevokeAllForUser(userID uuid.UUID) error {
+	return r.db.Model(&models.RefreshToken{}).
+		Where("user_id = ? AND is_revoked = false", userID).
+		Update("is_revoked", true).Error
+}
+
+func (r *RefreshTokenRepository) PurgeExpired() error {
+	return r.db.Where("expires_at < NOW() OR is_revoked = true").
+		Delete(&models.RefreshToken{}).Error
+}
+
 // private helpers
 
 func applyLogDateFilter(q *gorm.DB, from, to time.Time) *gorm.DB {
@@ -298,7 +347,3 @@ func applyLogDateFilter(q *gorm.DB, from, to time.Time) *gorm.DB {
 	}
 	return q
 }
-
-// stil need to add:
-// frachise log
-// refresh tokens
