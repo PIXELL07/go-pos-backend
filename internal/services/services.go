@@ -570,6 +570,57 @@ func (s *ThirdPartyService) Update(id uuid.UUID, updates map[string]interface{})
 	return &cfg, nil
 }
 
-// need to add:
 // UserService extras
-// error handling
+
+func (s *UserService) Update(id uuid.UUID, updates map[string]interface{}) (*models.User, error) {
+	var user models.User
+	if err := s.db.First(&user, "id = ?", id).Error; err != nil {
+		return nil, err
+	}
+	s.db.Model(&user).Updates(updates)
+	return &user, nil
+}
+
+func (s *UserService) Delete(id uuid.UUID) error {
+	return s.db.Delete(&models.User{}, "id = ?", id).Error
+}
+
+func (s *UserService) Invite(name, email, mobile string, role models.UserRole, outletID string) (*models.User, error) {
+	// Check for duplicates
+	var count int64
+	s.db.Model(&models.User{}).Where("email = ? AND deleted_at IS NULL", email).Count(&count)
+	if count > 0 {
+		return nil, errors.New("user with this email already exists")
+	}
+	// Generate a random temporary password
+	tempHash, _ := bcrypt.GenerateFromPassword([]byte(uuid.New().String()[:12]), bcrypt.DefaultCost)
+	user := &models.User{
+		Name:         name,
+		Email:        email,
+		Mobile:       mobile,
+		Role:         role,
+		PasswordHash: string(tempHash),
+		IsActive:     true,
+	}
+	if err := s.db.Create(user).Error; err != nil {
+		return nil, err
+	}
+	// Assign outlet access if given
+	if outletID != "" {
+		if oid, err := uuid.Parse(outletID); err == nil {
+			access := models.OutletAccess{UserID: user.ID, OutletID: oid, Role: role}
+			s.db.Create(&access)
+		}
+	}
+	return user, nil
+}
+
+func (s *UserService) GetByRole(role models.UserRole, outletID string) ([]models.User, error) {
+	q := s.db.Model(&models.User{}).Where("role = ? AND is_active = true AND deleted_at IS NULL", role)
+	if outletID != "" {
+		q = q.Joins("JOIN outlet_accesses oa ON oa.user_id = users.id AND oa.deleted_at IS NULL").
+			Where("oa.outlet_id = ?", outletID)
+	}
+	var users []models.User
+	return users, q.Order("name ASC").Find(&users).Error
+}
