@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
@@ -246,5 +247,127 @@ func main() {
 		reports.GET("/orders-master", reportsH.GetOrderMasterReport)
 		reports.GET("/online-orders", reportsH.GetOnlineOrderReport)
 		reports.GET("/chart-by-platform", reportsH.GetChartByPlatform)
+	}
+
+	// Purchases / Inventory
+	purchases := p.Group("/purchases")
+	{
+		purchases.GET("/pending", inventoryH.GetPendingPurchases)
+		purchases.POST("", inventoryH.CreatePurchase)
+		purchases.PATCH("/:id/status", inventoryH.UpdatePurchaseStatus)
+	}
+
+	// Notifications
+	notifs := p.Group("/notifications")
+	{
+		notifs.GET("", notifH.List)
+		notifs.PATCH("/:id/read", notifH.MarkRead)
+		notifs.PATCH("/read-all", notifH.MarkAllRead)
+	}
+
+	// Third-party configs
+	tp := p.Group("/thirdparty", middleware.RequireRole(models.RoleAdmin, models.RoleOwner))
+	{
+		tp.GET("", tpH.List)
+		tp.PUT("/:id", tpH.Update)
+	}
+
+	// Logs
+	logs := p.Group("/logs")
+	{
+		logs.GET("/menu-triggers", logsH.GetMenuTriggerLogs)
+		logs.GET("/online-store", logsH.GetOnlineStoreLogs)
+		logs.GET("/online-items", logsH.GetOnlineItemLogs)
+	}
+
+	// Franchises
+	franchise := p.Group("/franchises", middleware.RequireRole(models.RoleAdmin, models.RoleOwner))
+	{
+		franchise.GET("", franchiseH.List)
+		franchise.POST("", franchiseH.Create)
+		franchise.POST("/:id/outlets", franchiseH.AssignOutlet)
+	}
+
+	// Users
+	users := p.Group("/users")
+	{
+		users.GET("/billers", middleware.RequireRole(models.RoleAdmin, models.RoleOwner), userH.GetBillers)
+		users.GET("/admins", middleware.RequireRole(models.RoleAdmin), userH.GetAdmins)
+		users.POST("/invite", middleware.RequireRole(models.RoleAdmin, models.RoleOwner), userH.InviteUser)
+		users.PUT("/:id", middleware.RequireRole(models.RoleAdmin), userH.Update)
+		users.DELETE("/:id", middleware.RequireRole(models.RoleAdmin), userH.Delete)
+	}
+
+	// User Groups (Admin Groups + Biller Groups)
+	groups := p.Group("/groups", middleware.RequireRole(models.RoleAdmin, models.RoleOwner))
+	{
+		groups.GET("", groupH.List)
+		groups.POST("", groupH.Create)
+		groups.GET("/:id", groupH.Get)
+		groups.PUT("/:id", groupH.Update)
+		groups.DELETE("/:id", middleware.RequireRole(models.RoleAdmin), groupH.Delete)
+		groups.POST("/:id/members", groupH.AddMember)
+		groups.DELETE("/:id/members/:user_id", groupH.RemoveMember)
+		groups.POST("/:id/bulk-status", groupH.BulkSetStatus)
+	}
+
+	// Cloud Access
+	cloud := p.Group("/cloud-access", middleware.RequireRole(models.RoleAdmin, models.RoleOwner))
+	{
+		cloud.GET("", cloudH.List)
+		cloud.PATCH("/bulk-status", cloudH.BulkSetStatus)
+	}
+
+	// Store Status Tracking
+	storeStatus := p.Group("/store-status")
+	{
+		storeStatus.GET("", storeStatusH.List)
+		storeStatus.POST("/refresh", storeStatusH.Refresh)
+		storeStatus.GET("/history", storeStatusH.History)
+	}
+
+	// Export (CSV downloads)
+	exports := p.Group("/export")
+	{
+		exports.GET("/sales", exportH.SalesReport)
+		exports.GET("/item-wise", exportH.ItemWise)
+		exports.GET("/category-wise", exportH.CategoryWise)
+		exports.GET("/invoices", exportH.Invoices)
+		exports.GET("/orders-master", exportH.OrdersMaster)
+		exports.GET("/cancelled-orders", exportH.CancelledOrders)
+		exports.GET("/discounts", exportH.Discounts)
+		exports.GET("/hourly", exportH.Hourly)
+		exports.GET("/day-wise", exportH.DayWise)
+		exports.GET("/pending-purchases", exportH.PendingPurchases)
+		exports.GET("/store-status", exportH.StoreStatus)
+	}
+
+	// Start
+	addr := fmt.Sprintf(":%s", cfg.App.Port)
+	logger.Infof("Listening on http://localhost%s", addr)
+	if err := r.Run(addr); err != nil {
+		logger.Fatal("Server failed to start", zap.Error(err))
+	}
+}
+
+func zapRequestLogger(log *zap.Logger) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		start := time.Now()
+		c.Next()
+		fields := []zap.Field{
+			zap.String("method", c.Request.Method),
+			zap.String("path", c.Request.URL.Path),
+			zap.Int("status", c.Writer.Status()),
+			zap.Duration("latency", time.Since(start)),
+			zap.String("ip", c.ClientIP()),
+		}
+		switch {
+		case c.Writer.Status() >= 500:
+			log.Error("server error", fields...)
+		case c.Writer.Status() >= 400:
+			log.Warn("client error", fields...)
+		default:
+			log.Info("request", fields...)
+		}
 	}
 }
