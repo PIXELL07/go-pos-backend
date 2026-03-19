@@ -28,6 +28,8 @@ func writeCSV(c *gin.Context, result *services.ExportResult, err error) {
 	c.Data(http.StatusOK, result.ContentType, result.Data)
 }
 
+// FIX all report endpoints to use the same filter struct and parsing logic, and add pagination and complete error handling. (c)
+
 // GET /api/v1/export/sales?from=&to=&outlet_id=&status=
 func (h *ExportHandler) SalesReport(c *gin.Context) {
 	writeCSV(c, h.svc.SalesReportCSV(parseExportFilter(c)))
