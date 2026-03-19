@@ -5,6 +5,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"strconv"
+	"time"
 )
 
 // ExportService
@@ -177,4 +178,175 @@ func (s *ExportService) OrderMasterCSV(f SalesReportFilter) (*ExportResult, erro
 		ContentType: "text/csv",
 		Data:        buf.Bytes(),
 	}, nil
+}
+
+// Cancelled Orders CSV
+
+func (s *ExportService) CancelledOrdersCSV(f SalesReportFilter) (*ExportResult, error) {
+	rows, err := s.reports.GetCancelledOrderReport(f)
+	if err != nil {
+		return nil, err
+	}
+	var buf bytes.Buffer
+	w := csv.NewWriter(&buf)
+	w.Write([]string{"Invoice No", "Outlet", "Date", "Reason", "Total Amount"})
+	for _, r := range rows {
+		w.Write([]string{r.InvoiceNumber, r.OutletName, r.Date, r.Reason, fmtF(r.TotalAmount)})
+	}
+	w.Flush()
+	return &ExportResult{
+		Filename:    fmt.Sprintf("cancelled_orders_%s_%s.csv", f.From.Format("20060102"), f.To.Format("20060102")),
+		ContentType: "text/csv",
+		Data:        buf.Bytes(),
+	}, nil
+}
+
+// Discount Report CSV
+
+func (s *ExportService) DiscountCSV(f SalesReportFilter) (*ExportResult, error) {
+	rows, err := s.reports.GetDiscountReport(f)
+	if err != nil {
+		return nil, err
+	}
+	var buf bytes.Buffer
+	w := csv.NewWriter(&buf)
+	w.Write([]string{"Invoice No", "Outlet", "Date", "Discount Amt", "Discount %", "Total", "Reason"})
+	for _, r := range rows {
+		w.Write([]string{
+			r.InvoiceNumber, r.OutletName, r.Date,
+			fmtF(r.DiscountAmount), fmtF(r.DiscountPercent),
+			fmtF(r.TotalAmount), r.Reason,
+		})
+	}
+	w.Flush()
+	return &ExportResult{
+		Filename:    fmt.Sprintf("discounts_%s_%s.csv", f.From.Format("20060102"), f.To.Format("20060102")),
+		ContentType: "text/csv",
+		Data:        buf.Bytes(),
+	}, nil
+}
+
+// Hourly Report CSV
+
+func (s *ExportService) HourlyCSV(f SalesReportFilter) (*ExportResult, error) {
+	rows, err := s.reports.GetHourlyReport(f)
+	if err != nil {
+		return nil, err
+	}
+	var buf bytes.Buffer
+	w := csv.NewWriter(&buf)
+	w.Write([]string{"Hour", "Outlet", "Orders", "Revenue"})
+	for _, r := range rows {
+		w.Write([]string{
+			strconv.Itoa(r.Hour), r.OutletName,
+			strconv.FormatInt(r.Orders, 10), fmtF(r.Revenue),
+		})
+	}
+	w.Flush()
+	return &ExportResult{
+		Filename:    fmt.Sprintf("hourly_sales_%s_%s.csv", f.From.Format("20060102"), f.To.Format("20060102")),
+		ContentType: "text/csv",
+		Data:        buf.Bytes(),
+	}, nil
+}
+
+// Day-Wise CSV
+
+func (s *ExportService) DayWiseCSV(f SalesReportFilter) (*ExportResult, error) {
+	rows, err := s.reports.GetDayWiseReport(f)
+	if err != nil {
+		return nil, err
+	}
+	var buf bytes.Buffer
+	w := csv.NewWriter(&buf)
+	w.Write([]string{"Date", "Outlet", "Orders", "Revenue", "Net Sales", "Tax"})
+	for _, r := range rows {
+		w.Write([]string{
+			r.Date, r.OutletName,
+			strconv.FormatInt(r.Orders, 10),
+			fmtF(r.Revenue), fmtF(r.NetSales), fmtF(r.Tax),
+		})
+	}
+	w.Flush()
+	return &ExportResult{
+		Filename:    fmt.Sprintf("day_wise_%s_%s.csv", f.From.Format("20060102"), f.To.Format("20060102")),
+		ContentType: "text/csv",
+		Data:        buf.Bytes(),
+	}, nil
+}
+
+// Pending Purchases CSV
+
+func (s *ExportService) PendingPurchasesCSV(f PurchaseFilter) (*ExportResult, error) {
+	invSvc := &InventoryService{db: s.reports.db}
+	purchases2, _, err := invSvc.GetPendingPurchases(f)
+	if err != nil {
+		return nil, err
+	}
+	var buf bytes.Buffer
+	w := csv.NewWriter(&buf)
+	w.Write([]string{"ID", "Outlet", "Item Name", "Quantity", "Unit", "Amount", "Status", "Type", "Date"})
+	for _, r := range purchases2 {
+		outletName := ""
+		if r.Outlet.Name != "" {
+			outletName = r.Outlet.Name
+		}
+		w.Write([]string{
+			r.ID.String(), outletName, r.ItemName,
+			strconv.FormatFloat(r.Quantity, 'f', 2, 64),
+			r.Unit,
+			fmtF(r.Amount),
+			r.Status, r.Type,
+			r.CreatedAt.Format("2006-01-02 15:04"),
+		})
+	}
+	w.Flush()
+	return &ExportResult{
+		Filename:    fmt.Sprintf("pending_purchases_%s.csv", time.Now().Format("20060102")),
+		ContentType: "text/csv",
+		Data:        buf.Bytes(),
+	}, nil
+}
+
+// Store Status CSV
+
+func (s *ExportService) StoreStatusCSV(f StoreStatusFilter) (*ExportResult, error) {
+	ssSvc := &StoreStatusService{db: s.reports.db}
+	rows, _, err := ssSvc.GetStatus(f)
+	if err != nil {
+		return nil, err
+	}
+	var buf bytes.Buffer
+	w := csv.NewWriter(&buf)
+	w.Write([]string{"Outlet", "Platform", "Is Online", "Offline Since", "Last Checked"})
+	for _, r := range rows {
+		offlineSince := ""
+		if r.OfflineSince != nil {
+			offlineSince = r.OfflineSince.Format("2006-01-02 15:04")
+		}
+		outletName := ""
+		if r.Outlet.Name != "" {
+			outletName = r.Outlet.Name
+		}
+		online := "Yes"
+		if !r.IsOnline {
+			online = "No"
+		}
+		w.Write([]string{
+			outletName, r.Platform, online,
+			offlineSince,
+			r.LastChecked.Format("2006-01-02 15:04"),
+		})
+	}
+	w.Flush()
+	return &ExportResult{
+		Filename:    fmt.Sprintf("store_status_%s.csv", time.Now().Format("20060102")),
+		ContentType: "text/csv",
+		Data:        buf.Bytes(),
+	}, nil
+}
+
+// fmtF formats a float to 2 decimal places.
+func fmtF(f float64) string {
+	return strconv.FormatFloat(f, 'f', 2, 64)
 }
