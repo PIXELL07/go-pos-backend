@@ -8,7 +8,7 @@ import (
 	"github.com/prayosha/go-pos-backend/internal/services"
 )
 
-// ExportHandler serves CSV downloads for every report type.
+// serves CSV downloads for every report type.
 type ExportHandler struct {
 	svc *services.ExportService
 }
@@ -28,51 +28,58 @@ func writeCSV(c *gin.Context, result *services.ExportResult, err error) {
 	c.Data(http.StatusOK, result.ContentType, result.Data)
 }
 
-// FIX all report endpoints to use the same filter struct and parsing logic, and add pagination and complete error handling. (c)
-
 // GET /api/v1/export/sales?from=&to=&outlet_id=&status=
 func (h *ExportHandler) SalesReport(c *gin.Context) {
-	writeCSV(c, h.svc.SalesReportCSV(parseExportFilter(c)))
+	result, err := h.svc.SalesReportCSV(parseExportFilter(c))
+	writeCSV(c, result, err)
 }
 
 // GET /api/v1/export/item-wise
 func (h *ExportHandler) ItemWise(c *gin.Context) {
-	writeCSV(c, h.svc.ItemWiseCSV(parseExportFilter(c)))
+	result, err := h.svc.ItemWiseCSV(parseExportFilter(c))
+	writeCSV(c, result, err)
 }
 
 // GET /api/v1/export/category-wise
 func (h *ExportHandler) CategoryWise(c *gin.Context) {
-	writeCSV(c, h.svc.CategoryWiseCSV(parseExportFilter(c)))
+	result, err := h.svc.CategoryWiseCSV(parseExportFilter(c))
+	writeCSV(c, result, err)
 }
 
 // GET /api/v1/export/invoices
 func (h *ExportHandler) Invoices(c *gin.Context) {
-	writeCSV(c, h.svc.InvoiceCSV(parseExportFilter(c)))
+	result, err := h.svc.InvoiceCSV(parseExportFilter(c))
+	writeCSV(c, result, err)
 }
 
 // GET /api/v1/export/orders-master
 func (h *ExportHandler) OrdersMaster(c *gin.Context) {
-	writeCSV(c, h.svc.OrderMasterCSV(parseExportFilter(c)))
+	result, err := h.svc.OrderMasterCSV(parseExportFilter(c))
+	writeCSV(c, result, err)
 }
 
 // GET /api/v1/export/cancelled-orders
 func (h *ExportHandler) CancelledOrders(c *gin.Context) {
-	writeCSV(c, h.svc.CancelledOrdersCSV(parseExportFilter(c)))
+	result, err := h.svc.CancelledOrdersCSV(parseExportFilter(c))
+	writeCSV(c, result, err)
 }
 
 // GET /api/v1/export/discounts
 func (h *ExportHandler) Discounts(c *gin.Context) {
-	writeCSV(c, h.svc.DiscountCSV(parseExportFilter(c)))
+	result, err := h.svc.DiscountCSV(parseExportFilter(c))
+	writeCSV(c, result, err)
 }
 
 // GET /api/v1/export/hourly
 func (h *ExportHandler) Hourly(c *gin.Context) {
-	writeCSV(c, h.svc.HourlyCSV(parseExportFilter(c)))
+	result, err := h.svc.HourlyCSV(parseExportFilter(c))
+	writeCSV(c, result, err)
 }
 
 // GET /api/v1/export/day-wise
 func (h *ExportHandler) DayWise(c *gin.Context) {
-	writeCSV(c, h.svc.DayWiseCSV(parseExportFilter(c)))
+	result, err := h.svc.DayWiseCSV(parseExportFilter(c))
+	writeCSV(c, result, err)
 }
 
 // GET /api/v1/export/pending-purchases?from=&to=&outlet_id=&type=
@@ -89,7 +96,8 @@ func (h *ExportHandler) PendingPurchases(c *gin.Context) {
 		Page:     1,
 		Limit:    10000,
 	}
-	writeCSV(c, h.svc.PendingPurchasesCSV(filter))
+	result, err := h.svc.PendingPurchasesCSV(filter)
+	writeCSV(c, result, err)
 }
 
 // GET /api/v1/export/store-status?outlet_id=&platform=
@@ -100,7 +108,8 @@ func (h *ExportHandler) StoreStatus(c *gin.Context) {
 		Page:     1,
 		Limit:    10000,
 	}
-	writeCSV(c, h.svc.StoreStatusCSV(filter))
+	result, err := h.svc.StoreStatusCSV(filter)
+	writeCSV(c, result, err)
 }
 
 func parseExportFilter(c *gin.Context) services.SalesReportFilter {
