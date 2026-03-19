@@ -8,7 +8,7 @@ import (
 	"github.com/prayosha/go-pos-backend/internal/services"
 )
 
-// handles endpoints
+// handles all report endpoints.
 type ReportsHandler struct {
 	svc *services.ReportsService
 }
@@ -39,12 +39,12 @@ func (h *ReportsHandler) GetReportsList(c *gin.Context) {
 // GET /api/v1/reports/sales
 func (h *ReportsHandler) GetSalesReport(c *gin.Context) {
 	f := parseSalesFilter(c)
-	rows, err := h.svc.GetSalesReport(f)
+	report, err := h.svc.GetSalesReport(f)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate report"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"data": rows, "from": f.From, "to": f.To})
+	c.JSON(http.StatusOK, gin.H{"data": report.Data, "summary": report.Summary, "total": report.Total, "from": f.From, "to": f.To})
 }
 
 // GET /api/v1/reports/item-wise
@@ -160,7 +160,7 @@ func (h *ReportsHandler) GetChartByPlatform(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": rows, "date": dateStr})
 }
 
-// the canonical list the Flutter reports_page.dart uses.
+// it is the canonical list the Flutter reports_page.dart uses.
 func reportDefinitions() []gin.H {
 	return []gin.H{
 		{"id": "all_restaurant_sales", "title": "All Restaurant Sales Report", "endpoint": "/reports/sales", "category": "All Restaurant Report"},

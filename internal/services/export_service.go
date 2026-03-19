@@ -18,7 +18,7 @@ func NewExportService(reports *ReportsService) *ExportService {
 	return &ExportService{reports: reports}
 }
 
-// it carries the binary content and suggested filename.
+// carries the binary content and suggested filename.
 type ExportResult struct {
 	Filename    string
 	ContentType string
@@ -28,7 +28,7 @@ type ExportResult struct {
 // Sales Report CSV
 
 func (s *ExportService) SalesReportCSV(f SalesReportFilter) (*ExportResult, error) {
-	rows, err := s.reports.GetSalesReport(f)
+	report, err := s.reports.GetSalesReport(f)
 	if err != nil {
 		return nil, err
 	}
@@ -48,17 +48,17 @@ func (s *ExportService) SalesReportCSV(f SalesReportFilter) (*ExportResult, erro
 		"Pax", "Data Synced",
 	})
 
-	for _, r := range rows {
+	for _, r := range report.Data {
 		w.Write([]string{
 			r.RestaurantName, r.InvoiceNumbers,
 			strconv.Itoa(r.TotalBills),
 			fmtF(r.MyAmount), fmtF(r.TotalDiscount), fmtF(r.NetSales),
 			fmtF(r.DeliveryCharge), fmtF(r.ContainerCharge), fmtF(r.ServiceCharge),
 			fmtF(r.AdditionalCharge), fmtF(r.TotalTax), fmtF(r.RoundOff), fmtF(r.WaivedOff),
-			fmtF(r.TotalSales), fmtF(r.OnlineTaxCalculated),
-			fmtF(r.GSTByMerchant), fmtF(r.GSTByEcommerce),
+			fmtF(r.TotalSales), "0.00",
+			"0.00", "0.00",
 			fmtF(r.Cash), fmtF(r.Card), fmtF(r.DuePayment),
-			fmtF(r.Other), fmtF(r.Wallet), fmtF(r.Online),
+			"0.00", fmtF(r.Wallet), fmtF(r.Online),
 			strconv.Itoa(r.Pax), r.DataSynced,
 		})
 	}

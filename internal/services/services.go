@@ -199,7 +199,7 @@ type SalesReport struct {
 
 func NewReportsService(db *gorm.DB) *ReportsService { return &ReportsService{db: db} }
 
-func (s *ReportsService) GetSalesReport(userID uuid.UUID, filter SalesReportFilter) (*SalesReport, error) {
+func (s *ReportsService) GetSalesReport(filter SalesReportFilter) (*SalesReport, error) {
 	to := filter.To.Add(24 * time.Hour)
 	query := s.db.Table("orders o").
 		Joins("JOIN outlets ol ON ol.id = o.outlet_id").
@@ -269,22 +269,34 @@ type PurchaseFilter struct {
 	Type     string
 	From     time.Time
 	To       time.Time
+	Page     int
+	Limit    int
 }
 
 func NewInventoryService(db *gorm.DB) *InventoryService { return &InventoryService{db: db} }
 
-func (s *InventoryService) GetPendingPurchases(userID uuid.UUID, filter PurchaseFilter) ([]models.PendingPurchase, error) {
-	to := filter.To.Add(24 * time.Hour)
-	query := s.db.Model(&models.PendingPurchase{}).Preload("Outlet").
-		Where("created_at >= ? AND created_at < ?", filter.From, to)
-	if filter.OutletID != "" {
-		query = query.Where("outlet_id = ?", filter.OutletID)
+func (s *InventoryService) GetPendingPurchases(f PurchaseFilter) ([]models.PendingPurchase, int64, error) {
+	to := f.To.Add(24 * time.Hour)
+	q := s.db.Model(&models.PendingPurchase{}).Preload("Outlet").
+		Where("created_at >= ? AND created_at < ?", f.From, to)
+	if f.OutletID != "" {
+		q = q.Where("outlet_id = ?", f.OutletID)
 	}
-	if filter.Type != "" {
-		query = query.Where("type = ?", filter.Type)
+	if f.Type != "" {
+		q = q.Where("type = ?", f.Type)
+	}
+	var total int64
+	q.Count(&total)
+	page, limit := f.Page, f.Limit
+	if page <= 0 {
+		page = 1
+	}
+	if limit <= 0 {
+		limit = 20
 	}
 	var purchases []models.PendingPurchase
-	return purchases, query.Order("created_at DESC").Find(&purchases).Error
+	err := q.Order("created_at DESC").Offset((page - 1) * limit).Limit(limit).Find(&purchases).Error
+	return purchases, total, err
 }
 
 func (s *InventoryService) CreatePurchase(p *models.PendingPurchase) error {
