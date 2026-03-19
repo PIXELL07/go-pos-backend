@@ -98,9 +98,10 @@ func (s *MenuService) GetItems(outletID uuid.UUID, filter MenuItemFilter) ([]mod
 	if filter.CategoryID != "" {
 		query = query.Where("category_id = ?", filter.CategoryID)
 	}
-	if filter.IsAvailable == "true" {
+	switch filter.IsAvailable {
+	case "true":
 		query = query.Where("is_available = true")
-	} else if filter.IsAvailable == "false" {
+	case "false":
 		query = query.Where("is_available = false")
 	}
 	if filter.IsOnline == "true" {
@@ -303,7 +304,7 @@ func (s *InventoryService) CreatePurchase(p *models.PendingPurchase) error {
 	return s.db.Create(p).Error
 }
 
-func (s *InventoryService) UpdatePurchaseStatus(id uuid.UUID, status string) (*models.PendingPurchase, error) {
+func (s *InventoryService) UpdateStatus(id uuid.UUID, status string) (*models.PendingPurchase, error) {
 	var p models.PendingPurchase
 	if err := s.db.First(&p, "id = ?", id).Error; err != nil {
 		return nil, err
@@ -333,9 +334,10 @@ func NewNotificationService(db *gorm.DB) *NotificationService { return &Notifica
 
 func (s *NotificationService) GetNotifications(userID uuid.UUID, filter NotificationFilter) (*NotifResult, error) {
 	query := s.db.Model(&models.Notification{}).Where("user_id = ?", userID)
-	if filter.IsRead == "true" {
+	switch filter.IsRead {
+	case "true":
 		query = query.Where("is_read = true")
-	} else if filter.IsRead == "false" {
+	case "false":
 		query = query.Where("is_read = false")
 	}
 	var total int64
@@ -359,7 +361,7 @@ type ThirdPartyService struct{ db *gorm.DB }
 
 func NewThirdPartyService(db *gorm.DB) *ThirdPartyService { return &ThirdPartyService{db: db} }
 
-func (s *ThirdPartyService) GetConfigs(outletID string) ([]models.ThirdPartyConfig, error) {
+func (s *ThirdPartyService) List(outletID string) ([]models.ThirdPartyConfig, error) {
 	query := s.db.Model(&models.ThirdPartyConfig{}).Preload("Outlet")
 	if outletID != "" {
 		query = query.Where("outlet_id = ?", outletID)

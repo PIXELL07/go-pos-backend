@@ -365,7 +365,7 @@ func (h *InventoryHandler) UpdatePurchaseStatus(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if err := h.inventoryService.UpdateStatus(id, req.Status); err != nil {
+	if _, err := h.inventoryService.UpdateStatus(id, req.Status); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update status"})
 		return
 	}
